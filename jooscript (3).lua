@@ -119,7 +119,7 @@ ParryTab:CreateKeybind({
     HoldToInteract = false,
     Flag = "AutoClickerKey",
     Callback = function(Key)
-        selectedKey = Key
+        selectedKey = Enum.KeyCode[Key]
     end,
 })
 
@@ -141,7 +141,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         autoClickEnabled = not autoClickEnabled
         Rayfield:Notify({
             Title = "Auto Clicker",
-            Content = autoClickEnabled and "✅ Auto Clicker **aktiviert**" or "❌ Auto Clicker **deaktiviert**",
+            Content = autoClickEnabled and "✅ Auto Clicker **enabled**" or "❌ Auto Clicker **disabled**",
             Duration = 3,
             Image = 4483362458
         })
