@@ -105,7 +105,7 @@ local FOVSlider = PlayerTab:CreateSlider({
 -- === Parry Tab ===
 local ParryTab = Window:CreateTab("Parry", 4483362458)
 
--- === Auto Clicker Einstellungen ===
+-- Auto Clicker
 local autoClickEnabled = false
 local clickDelay = 0.1
 local selectedKey = Enum.KeyCode.One
@@ -113,19 +113,16 @@ local selectedKey = Enum.KeyCode.One
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
 
--- Hotkey Auswahl (setzt die Taste)
 ParryTab:CreateKeybind({
     Name = "Auto Clicker Hotkey",
     CurrentKeybind = "One",
     HoldToInteract = false,
     Flag = "AutoClickerKey",
     Callback = function(Key)
-        print("Hotkey gesetzt auf:", Key.Name)
         selectedKey = Key
     end,
 })
 
--- Klickgeschwindigkeit einstellen
 ParryTab:CreateSlider({
     Name = "Click Speed (sec)",
     Range = {0.01, 1},
@@ -138,32 +135,19 @@ ParryTab:CreateSlider({
     end,
 })
 
--- Hotkey Listener zum Umschalten
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == selectedKey then
         autoClickEnabled = not autoClickEnabled
-        print("AutoClicker Status:", autoClickEnabled)
-
-        if autoClickEnabled then
-            Rayfield:Notify({
-                Title = "Auto Clicker",
-                Content = "✅ Auto Clicker **aktiviert** per Hotkey",
-                Duration = 3,
-                Image = 4483362458
-            })
-        else
-            Rayfield:Notify({
-                Title = "Auto Clicker",
-                Content = "❌ Auto Clicker **deaktiviert** per Hotkey",
-                Duration = 3,
-                Image = 4483362458
-            })
-        end
+        Rayfield:Notify({
+            Title = "Auto Clicker",
+            Content = autoClickEnabled and "✅ Auto Clicker **aktiviert**" or "❌ Auto Clicker **deaktiviert**",
+            Duration = 3,
+            Image = 4483362458
+        })
     end
 end)
 
--- Auto Clicker Loop
 task.spawn(function()
     while true do
         task.wait(clickDelay)
@@ -175,62 +159,63 @@ task.spawn(function()
     end
 end)
 
--- === Auto Parry ===
+-- === Auto Parry (mit EIN/AUS) ===
+local autoParryEnabled = false
+local autoParryConnection = nil
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+local function StartAutoParry()
+    if autoParryConnection then return end
+    autoParryEnabled = true
+
+    local Cooldown = tick()
+    local Parried = false
+
+    autoParryConnection = RunService.PreSimulation:Connect(function()
+        if not autoParryEnabled or not Player.Character then return end
+        local Ball = nil
+        for _, b in ipairs(workspace.Balls:GetChildren()) do
+            if b:GetAttribute("realBall") then Ball = b break end
+        end
+        if not Ball then return end
+
+        local HRP = Player.Character:FindFirstChild("HumanoidRootPart")
+        if not HRP then return end
+
+        local Speed = Ball.zoomies.VectorVelocity.Magnitude
+        local Distance = (HRP.Position - Ball.Position).Magnitude
+
+        if Ball:GetAttribute("target") == Player.Name and not Parried and Distance / Speed <= 0.55 then
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            Parried = true
+            Cooldown = tick()
+
+            task.delay(1, function()
+                Parried = false
+            end)
+        end
+    end)
+end
+
+local function StopAutoParry()
+    autoParryEnabled = false
+    if autoParryConnection then
+        autoParryConnection:Disconnect()
+        autoParryConnection = nil
+    end
+end
+
 ParryTab:CreateToggle({
     Name = "Auto Parry",
     CurrentValue = false,
     Flag = "AutoParry",
     Callback = function(Value)
         if Value then
-            local RunService = game:GetService("RunService")
-            local Players = game:GetService("Players")
-            local Player = Players.LocalPlayer
-            local Cooldown = tick()
-            local Parried = false
-            local Connection = nil
-
-            local function GetBall()
-                for _, Ball in ipairs(workspace.Balls:GetChildren()) do
-                    if Ball:GetAttribute("realBall") then
-                        return Ball
-                    end
-                end
-            end
-
-            local function ResetConnection()
-                if Connection then
-                    Connection:Disconnect()
-                    Connection = nil
-                end
-            end
-
-            workspace.Balls.ChildAdded:Connect(function()
-                local Ball = GetBall()
-                if not Ball then return end
-                ResetConnection()
-                Connection = Ball:GetAttributeChangedSignal("target"):Connect(function()
-                    Parried = false
-                end)
-            end)
-
-            RunService.PreSimulation:Connect(function()
-                if not Player.Character then return end
-                local Ball, HRP = GetBall(), Player.Character:FindFirstChild("HumanoidRootPart")
-                if not Ball or not HRP then return end
-
-                local Speed = Ball.zoomies.VectorVelocity.Magnitude
-                local Distance = (HRP.Position - Ball.Position).Magnitude
-
-                if Ball:GetAttribute("target") == Player.Name and not Parried and Distance / Speed <= 0.55 then
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                    Parried = true
-                    Cooldown = tick()
-
-                    if (tick() - Cooldown) >= 1 then
-                        Parried = false
-                    end
-                end
-            end)
+            StartAutoParry()
+        else
+            StopAutoParry()
         end
     end,
 })
